@@ -1,4 +1,4 @@
-# SwarmFly v2.0 — Drone Swarm Simulation & Test Platform
+# SwarmFly — Drone Swarm Simulation & Test Platform
 
 SwarmFly is a modular MATLAB GUI application for simulating, visualizing, and testing cooperative UAV swarm behavior. It provides a real-time 2D/3D operational map, four swarm coordination modes, simulated IMU telemetry, GPS geolocation, and a plugin architecture for extending the platform with fault injection, performance metrics, energy modeling, collision avoidance, geofencing, automated test scenarios, and 3D visualization — all without modifying the core application code.
 
