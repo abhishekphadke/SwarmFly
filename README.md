@@ -1,317 +1,534 @@
-# SwarmFly — Drone Swarm Simulation & Test Platform
+# SwarmFly— Drone Swarm Simulation & Test Platform
 
-SwarmFly is a modular MATLAB GUI application for simulating, visualizing, and testing cooperative UAV swarm behavior. It provides a real-time 2D/3D operational map, four swarm coordination modes, simulated IMU telemetry, GPS geolocation, and a plugin architecture for extending the platform with fault injection, performance metrics, energy modeling, collision avoidance, geofencing, automated test scenarios, and 3D visualization — all without modifying the core application code.
+SwarmFly is a modular MATLAB GUI application for simulating, visualizing, and testing cooperative UAV swarm behavior. It provides a real-time 2D/3D operational map, four swarm coordination modes, simulated IMU telemetry, GPS geolocation, and a plugin architecture that allows researchers and developers to extend the platform with fault injection, performance metrics, energy modeling, collision avoidance, geofencing, and automated test scenarios — all without modifying the core application code.
 
+The platform is designed as both a simulation tool and a test harness: you can run the swarm, inject faults mid-flight, measure KPIs, and evaluate algorithm resilience through repeatable automated scenarios.
+
+---
+
+## Table of Contents
+
+1. [Requirements](#requirements)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [File Structure](#file-structure)
+5. [Core Application](#core-application)
+   - [GUI Tabs](#gui-tabs)
+   - [Swarm Modes](#swarm-modes)
+   - [UAV Specifications](#uav-specifications)
+   - [GPS Integration](#gps-integration)
+6. [Plugin System](#plugin-system)
+   - [Architecture Overview](#architecture-overview)
+   - [Enabling Plugins](#enabling-plugins)
+   - [Plugin Lifecycle](#plugin-lifecycle)
+   - [Plugin State API](#plugin-state-api)
+7. [Shipped Plugins](#shipped-plugins)
+   - [Fault Injection](#fault-injection)
+   - [Metrics Dashboard](#metrics-dashboard)
+   - [Battery Model](#battery-model)
+   - [Collision Avoidance](#collision-avoidance)
+   - [Scenario Runner](#scenario-runner)
+   - [3D View](#3d-view)
+   - [Geofencing](#geofencing)
+   - [Map Polish](#map-polish)
+8. [Programmatic API](#programmatic-api)
+9. [Creating Custom Plugins](#creating-custom-plugins)
+10. [Extending the Core](#extending-the-core)
+11. [Simulation Engine Details](#simulation-engine-details)
+12. [Telemetry Data Format](#telemetry-data-format)
+13. [Troubleshooting](#troubleshooting)
+14. [License](#license)
+
+---
 
 ## Requirements
 
-- MATLAB R2020b or later (requires uifigure, App Designer components, uigridlayout)
-- Internet connection for IP-based GPS geolocation (optional; app works without it)
-- No additional toolboxes required
+- **MATLAB R2020b** or later (requires `uifigure`, App Designer components, `uigridlayout`)
+- **Internet connection** for IP-based GPS geolocation (optional; app works without it)
+- No additional toolboxes required. The application uses only core MATLAB functionality.
 
+---
+
+## Installation
+
+1. Download or clone the project files.
+2. Ensure the following structure is preserved:
+
+```
+SwarmFly/
+  SwarmFly.m
+  run_SwarmFly.m
+  README.md
+  plugins/
+    swf_plugin_template.m
+    swf_fault_injection.m
+    swf_metrics.m
+    swf_battery.m
+    swf_collision.m
+    swf_scenario_runner.m
+    swf_3d_view.m
+    swf_geofence.m
+    swf_map_polish.m
+```
+
+3. Open MATLAB and navigate to the `SwarmFly/` directory.
+4. Run:
+
+```matlab
+run_SwarmFly
+```
+
+The application window will open, plugins will be discovered and enabled automatically, and GPS acquisition will be attempted.
+
+---
 
 ## Quick Start
 
 ```matlab
-cd SwarmFly/        % navigate to the project folder
-run_SwarmFly        % launches app and enables all plugins
+% Launch with all plugins enabled
+run_SwarmFly
+
+% Or launch manually with selective plugins
+app = SwarmFly();
+app.enablePlugin('fault_injection');
+app.enablePlugin('metrics');
+app.onStart();  % Begin simulation
 ```
 
 After launch:
-1. The Map & Control tab shows 4 colored UAV triangles in diamond formation.
-2. Click **Start** to begin simulation.
-3. Switch between tabs to access plugin features (Fault Injection, Metrics, 3D View, etc.).
-4. Click **Add Waypoint** then click the map to guide the leader.
+1. The **Map & Control** tab shows the swarm in a diamond formation with 4 colored UAV triangles.
+2. Select a swarm mode from the dropdown (Leader-Follower is the default).
+3. Click **Start** to begin the simulation.
+4. Switch to plugin tabs (Fault Injection, Metrics, etc.) to use test features.
+5. Click **Add Waypoint** then click on the map to guide the swarm leader.
+6. Adjust sliders for max swarm distance, altitude, speed, and wind.
 
+---
 
-## Project Structure
+## File Structure
 
-```
-SwarmFly/
-├── SwarmFly.m                        Core application (1,324 lines)
-├── run_SwarmFly.m                    Launcher script with auto-enable
-├── README.md                         This file
-├── plugins/                          Plugin directory (auto-scanned)
-│   ├── swf_plugin_template.m         Reference template for new plugins
-│   ├── swf_fault_injection.m         Hardware/environmental fault injection
-│   ├── swf_metrics.m                 Real-time KPI dashboard (6 metrics)
-│   ├── swf_battery.m                 Per-UAV battery drain simulation
-│   ├── swf_collision.m               Collision detection + emergency separation
-│   ├── swf_scenario_runner.m         Automated test scenario execution
-│   ├── swf_3d_view.m                 Interactive 3D altitude visualization
-│   ├── swf_geofence.m                No-fly zones and perimeter fencing
-│   └── swf_map_polish.m              Compass rose, scale bar, legend overlays
-└── paper/                            Research paper materials (optional)
-    ├── appendix_equations.tex         57 numbered equations with \labels
-    ├── paper_sections.tex             Sections 3-4 (Framework + Features)
-    ├── paper_sections.docx            Same sections as Word document
-    ├── future_work.tex                Future Work section (8 directions)
-    └── experiments_results.tex        8 experiments with 9 results tables
-```
+| File | Lines | Purpose |
+|------|-------|---------|
+| `SwarmFly.m` | 1,324 | Core application: GUI, simulation engine, plugin infrastructure |
+| `run_SwarmFly.m` | 47 | Launcher script with auto-enable and usage examples |
+| `plugins/swf_plugin_template.m` | 97 | Reference template for creating new plugins |
+| `plugins/swf_fault_injection.m` | 212 | Hardware/environmental fault injection with GUI |
+| `plugins/swf_metrics.m` | 149 | Real-time KPI dashboard (6 metrics) |
+| `plugins/swf_battery.m` | 175 | Per-UAV battery drain simulation |
+| `plugins/swf_collision.m` | 139 | Collision detection and emergency separation |
+| `plugins/swf_scenario_runner.m` | 310 | Automated test scenario execution |
+| `plugins/swf_3d_view.m` | 185 | Interactive 3D altitude visualization |
+| `plugins/swf_geofence.m` | 390 | No-fly zones and perimeter fencing |
+| `plugins/swf_map_polish.m` | 178 | Compass rose, scale bar, and legend overlays |
+| **Total** | **3,206** | |
 
-Total codebase: ~3,200 lines of MATLAB across 11 files.
-
+---
 
 ## Core Application
 
 ### GUI Tabs
 
-| Tab | Purpose |
-|-----|---------|
-| Map & Control | Live 2D swarm map, mode selection, sliders, waypoints, event log |
-| Telemetry | 6 real-time rolling plots: XYZ position + accel/gyro/magnetometer |
-| Settings | Sim rate, comm range, wind, visual toggles, telemetry export |
-| Modules | Plugin manager: discover, enable/disable, view details |
+The core application provides four built-in tabs:
 
-The window auto-sizes to fit the host screen and centers itself. All layout is responsive.
+**Map & Control** — The primary operational view. Contains a 2D area map (UIAxes) with equal-axis scaling showing UAV positions as colored triangles, inter-UAV connection lines with distance labels (gray when healthy, red when exceeding max swarm distance), UAV trails, a base station marker, and waypoint markers. The control panel includes swarm mode dropdown, leader UAV selector, sliders for max swarm distance (10–200m), cruise altitude (5–120m), and cruise speed (1–25 m/s), Start/Stop/Reset buttons, GPS re-acquisition, waypoint placement, a status lamp, and a scrolling event log.
+
+**Telemetry** — Six real-time rolling plots arranged in a 2x3 grid. Row 1 shows Position X, Position Y, Position Z (altitude) with one line per UAV, color-coded. Row 2 shows Accelerometer (3-axis), Gyroscope (3-axis), Magnetometer (3-axis) with solid/dashed/dotted lines for x/y/z components. Telemetry plots update only when the Telemetry tab is active (performance optimization). Rolling buffer of 500 samples per UAV.
+
+**Settings** — Global simulation and display parameters including simulation update rate (1–30 Hz), communication range (50–1000m), wind speed (0–20 m/s) and wind direction (0–360 deg), visual toggles for trails, grid, and connection lines, and telemetry export to `.mat` file.
+
+**Modules** — Plugin manager with a left panel listing discovered plugins with enable/disable checkboxes, name buttons, and version labels, and a right panel showing plugin name, version, description, capabilities (Tab / Per-Tick / Toolbar), and source file. Includes a rescan button to re-discover plugins after adding new files.
 
 ### Swarm Modes
 
-| Mode | Behavior |
-|------|----------|
-| Leader-Follower | Configurable leader; others maintain diamond formation with proportional tracking |
-| Decentralized | All UAVs wander autonomously with boids-style cohesion + separation |
-| Hetero-Relay | UAV-4 acts as comm relay between swarm and base station |
-| Hetero-Speed | UAV-1 scouts at 2x speed; UAVs 2-4 follow at 0.6x speed |
+| Mode | Behavior | Leader | Roles |
+|------|----------|--------|-------|
+| **Leader-Follower** | One UAV leads (follows waypoints or orbits); other 3 maintain a diamond formation offset with proportional tracking. Followers are constrained to max swarm distance. | Configurable via dropdown | leader, follower, follower, follower |
+| **Decentralized** | All 4 UAVs wander autonomously using boids-style behaviors: randomized wander + inter-UAV separation (repulsion when < 10m) + centroid cohesion (attraction to swarm center). | None | autonomous x4 |
+| **Hetero-Relay** | UAVs 1-3 operate in leader-follower formation. UAV-4 acts as a communication relay node, hovering at 40% of the distance between base and the active swarm centroid. Relay is speed-limited to 3 m/s. | UAV-1 | normal, normal, normal, relay |
+| **Hetero-Speed** | UAV-1 is a fast scout (2x cruise speed). UAVs 2-4 are slow followers (0.6x cruise speed) maintaining a V-formation behind the scout. | UAV-1 (scout) | fast, slow, slow, slow |
 
-### UAV Configuration
+### UAV Specifications
 
-| UAV | Color | Default Role | Initial Position |
-|-----|-------|-------------|-----------------|
-| UAV-1 (Alpha) | Blue | Leader | (0, 15, 30) |
-| UAV-2 (Bravo) | Red | Follower | (-15, 0, 30) |
-| UAV-3 (Charlie) | Green | Follower | (15, 0, 30) |
-| UAV-4 (Delta) | Orange | Follower | (0, -15, 30) |
+| Property | UAV-1 (Alpha) | UAV-2 (Bravo) | UAV-3 (Charlie) | UAV-4 (Delta) |
+|----------|---------------|---------------|-----------------|---------------|
+| Color | Blue | Red | Green | Orange |
+| RGB | (0.18, 0.55, 0.94) | (0.90, 0.30, 0.24) | (0.20, 0.78, 0.35) | (0.95, 0.65, 0.10) |
+| Default role | Leader | Follower | Follower | Follower |
+| Map symbol | Triangle | Triangle | Triangle | Triangle (Diamond when relay) |
+| Initial position | (0, 15, 30) | (-15, 0, 30) | (15, 0, 30) | (0, -15, 30) |
 
-### GPS
+### GPS Integration
 
-Acquires location via ip-api.com on startup. Displays lat/lon in map title. Falls back to local-frame mode (37.0 N, 76.0 W) if offline. Re-acquire anytime via button.
+On startup, SwarmFly attempts to acquire the user's geographic coordinates via IP-based geolocation using the ip-api.com REST API. If successful, the base station latitude/longitude is displayed in the map title and stored in `app.MapOrigin`. If the request fails (no internet, API down), the app defaults to coordinates (37.0, -76.0) and continues operating in local frame mode. GPS can be re-acquired at any time via the "Re-acquire GPS" button.
 
+---
 
-## Plugins
+## Plugin System
+
+### Architecture Overview
+
+SwarmFly's plugin system allows external `.m` files to integrate deeply into the core application without modifying `SwarmFly.m`. Plugins can create GUI tabs with buttons, sliders, tables, plots, and any UIFigure components. They can run code every simulation tick with full read/write access to UAV positions, headings, telemetry, and simulation parameters. They can store persistent state across ticks using a namespaced key-value store. They can access the event log to report warnings, errors, and status updates. They can modify UAV behavior by directly writing to `app.UAVPositions`, `app.UAVHeadings`, and `app.TelHistory`.
 
 ### Enabling Plugins
 
+There are three ways to enable plugins:
+
 ```matlab
-app.enableAllPlugins();            % enable everything
-app.enablePlugin('fault_injection'); % enable one by id
-app.disablePlugin('battery');      % disable one
+% 1. Automatic (in run_SwarmFly.m - enabled by default)
+app.enableAllPlugins();
+
+% 2. Selective
+app.enablePlugin('fault_injection');
+app.enablePlugin('metrics');
+
+% 3. Via GUI
+% Go to the Modules tab and check the box next to any plugin
 ```
 
-Or check/uncheck boxes in the Modules tab.
+### Plugin Lifecycle
 
-### Plugin Summary
+```
+Startup
+  discoverPlugins()          Scans plugins/ for swf_*.m files
+    For each file: calls the function, gets the plugin struct
+    Registers in PluginRegistry, sets PluginEnabled.(id) = false
 
-| Plugin | ID | Tab | Per-Tick | Purpose |
-|--------|----|-----|---------|---------|
-| Fault Injection | fault_injection | Yes | Yes | Inject 8 fault types with configurable intensity/duration |
-| Metrics Dashboard | metrics | Yes | Yes | 6 real-time KPI plots (spread, formation error, link quality, etc.) |
-| Battery Model | battery | Yes | Yes | 4S LiPo drain per UAV with voltage sag and endurance estimate |
-| Collision Avoidance | collision | Yes | Yes | Emergency separation forces, near-miss/collision counters |
-| Scenario Runner | scenarios | Yes | Yes | 6 automated test scenarios with pass/fail evaluation |
-| 3D View | view3d | Yes | Yes | 3D visualization with altitude stems, ground shadows, connections |
-| Geofencing | geofence | Yes | Yes | Circular/rectangular no-fly zones, perimeter fence, repulsion forces |
-| Map Polish | map_polish | No | Yes | Compass rose, scale bar, legend, base label on main map |
+User enables plugin (checkbox or app.enablePlugin)
+  PluginEnabled.(id) = true
+  PluginStates.(id) = struct()      Empty state container
+  onLoad(app)                       Plugin initializes its data
+  buildTab(app, tab)                Plugin builds its GUI tab
 
-### Fault Types
+Simulation running (every tick)
+  simStep()
+    Physics engine runs
+    Telemetry recorded
+    For each enabled plugin with hasStep:
+      plugin.onStep(app)            Plugin reads/writes app state
+    Map graphics updated
+    drawnow limitrate
 
-GPS Drift, GPS Denied, Motor Failure, Comm Blackout, Sensor Noise Spike, Frozen Actuator, Wind Gust, Battery Critical. Each has intensity (0.1-3.0x) and duration (1-600s) controls.
+User disables plugin (uncheck or app.disablePlugin)
+  PluginEnabled.(id) = false
+  onUnload(app)                     Plugin cleans up
+  Tab deleted
+  PluginStates.(id) removed
+```
 
-### Built-in Test Scenarios
+### Plugin State API
 
-| Scenario | Mode | Wind | Duration |
-|----------|------|------|----------|
-| Formation Hold - Calm | Leader-Follower | 0 m/s | 30s |
-| Formation Hold - Wind | Leader-Follower | 8 m/s @ 45 deg | 30s |
-| Waypoint Nav - Square | Leader-Follower | 0 m/s | 60s |
-| Decentralized Cohesion | Decentralized | 3 m/s @ 180 deg | 45s |
-| Relay Endurance | Hetero-Relay | 5 m/s @ 270 deg | 60s |
-| Fast Scout Sprint | Hetero-Speed | 0 m/s | 45s |
+Each plugin gets an isolated namespace for storing data between ticks:
 
+```matlab
+% Store a value
+app.setState('my_plugin', 'key', value);
+
+% Retrieve a value (returns [] if not found)
+val = app.getState('my_plugin', 'key');
+```
+
+State is automatically cleared when a plugin is disabled. Plugins should use their own `id` as the namespace to avoid collisions.
+
+---
+
+## Shipped Plugins
+
+### Fault Injection
+**ID:** `fault_injection` | **Tab:** Yes | **Per-Tick:** Yes
+
+Injects hardware and environmental faults into individual UAVs during simulation to test swarm resilience.
+
+Supported fault types:
+
+| Fault | Effect on UAV |
+|-------|--------------|
+| GPS Drift | Position accumulates sinusoidal drift proportional to elapsed time |
+| GPS Denied | Position receives random walk noise (UAV flies blind) |
+| Motor Failure | Altitude decays at 0.8 x intensity m/s |
+| Comm Blackout | Position receives large random perturbation (no formation correction) |
+| Sensor Noise Spike | Accelerometer telemetry gets +/-20g noise spikes |
+| Frozen Actuator | UAV drifts in last known heading direction |
+| Wind Gust | Random-direction impulse of 15 x intensity m/s |
+| Battery Critical | Altitude decays at 1.5 x intensity m/s |
+
+GUI controls include fault type dropdown, target UAV selector (individual or all), duration (1-600s), intensity slider (0.1-3.0x), inject/clear buttons, and a live table of active faults with remaining time.
+
+### Metrics Dashboard
+**ID:** `metrics` | **Tab:** Yes | **Per-Tick:** Yes
+
+Six real-time KPI plots tracking swarm performance:
+
+| Metric | Definition |
+|--------|-----------|
+| Swarm Spread | Maximum pairwise distance between any two UAVs (m) |
+| Mean Inter-UAV Distance | Average of all 6 pairwise distances (m) |
+| Centroid Drift | Distance from swarm centroid to base station (m) |
+| Formation Error | Mean positional deviation from ideal formation offsets (m) |
+| Altitude Deviation | Mean absolute altitude error from cruise altitude (m) |
+| Link Quality | Percentage of UAV pairs within communication range (%) |
+
+Rolling buffer of 1,000 samples. Each metric is plotted as a single colored line.
+
+### Battery Model
+**ID:** `battery` | **Tab:** Yes | **Per-Tick:** Yes
+
+Simulates 4S LiPo battery drain per UAV based on flight dynamics. The energy model uses base hover current of 18A, speed load of 2.0A per m/s, altitude penalty of 0.05A per meter above 20m, wind load of 0.5A per m/s wind speed, battery capacity of 5,000 mAh per UAV, and linear voltage sag from 16.8V (full) to 12.0V (dead). GUI shows a status table (per-UAV remaining mAh, percentage, voltage, current draw, estimated flight time) and historical battery percentage plot with color-coded lines. Warnings are logged at 20% and 10% remaining.
+
+### Collision Avoidance
+**ID:** `collision` | **Tab:** Yes | **Per-Tick:** Yes
+
+Safety layer that monitors pairwise distances and applies emergency separation maneuvers. When two UAVs are within the safe distance (default 5m), a repulsion force proportional to penetration depth is applied along the separation vector. Near-misses are logged when distance falls below the safe distance. Collisions are logged when distance drops below 40% of safe distance. GUI shows near-miss and collision counters, a safe distance slider (1-20m), and a minimum pairwise distance plot over time with safe-distance threshold line.
+
+### Scenario Runner
+**ID:** `scenarios` | **Tab:** Yes | **Per-Tick:** Yes
+
+Defines and executes repeatable test scenarios with pass/fail evaluation.
+
+Built-in scenarios:
+
+| Scenario | Mode | Wind | Duration | Max Dist |
+|----------|------|------|----------|----------|
+| Formation Hold - Calm | Leader-Follower | 0 m/s | 30s | 50m |
+| Formation Hold - Wind | Leader-Follower | 8 m/s @ 45 deg | 30s | 50m |
+| Waypoint Nav - Square | Leader-Follower | 0 m/s | 60s | 50m |
+| Decentralized Cohesion | Decentralized | 3 m/s @ 180 deg | 45s | 80m |
+| Relay Endurance | Hetero-Relay | 5 m/s @ 270 deg | 60s | 60m |
+| Fast Scout Sprint | Hetero-Speed | 0 m/s | 45s | 100m |
+
+GUI includes scenario dropdown, Run Selected / Run All / Abort buttons, progress display with elapsed time and max spread, and a results table with pass/fail for each completed scenario. Run All executes scenarios sequentially with 2-second gaps.
+
+### 3D View
+**ID:** `view3d` | **Tab:** Yes | **Per-Tick:** Yes
+
+Interactive 3D visualization of the swarm showing the altitude dimension. Features include UAV markers as colored triangles at actual (x, y, z) positions, dotted altitude stems from each UAV to the ground plane, gray shadow projections on the ground, 3D inter-UAV connection lines (blue healthy, red over-distance), a transparent mesh ground plane with base station marker, labels showing UAV number and altitude (e.g. `U2 [30m]`), MATLAB's built-in 3D rotation/zoom via mouse drag, and dynamic axis limits tracking the swarm.
+
+### Geofencing
+**ID:** `geofence` | **Tab:** Yes | **Per-Tick:** Yes
+
+No-fly zone definition and enforcement with map overlays. Supports circular and rectangular no-fly zones drawn as red dashed shaded regions on the map. Ships with 2 demo zones (Tower circle at (80,60) r=25m and Building rect at (-100,-80) 40x50m). New zones can be placed by clicking the map. Includes a configurable perimeter fence (dashed blue circle, default 200m radius). Enforcement uses physics-based repulsion forces that push UAVs away from zone boundaries, with a soft boundary that begins gentle push 8m before the zone edge. GUI provides perimeter radius slider, repulsion strength slider, enforcement toggles, add circle/rect/clear buttons, violation counter, zone count, and zone list table.
+
+### Map Polish
+**ID:** `map_polish` | **Tab:** No | **Per-Tick:** Yes
+
+Visual polish overlays on the main swarm map. No dedicated tab — elements are drawn directly on MapAxes and reposition each tick as the view zooms and pans. Elements include a compass rose (top-left) with a red north indicator triangle and N/S/E/W labels, a scale bar (bottom-left) with endcaps and auto-selected round-number distance label (snaps to 5/10/20/25/50/100/200/500m), a UAV legend (top-right) as a semi-transparent box showing each UAV's color triangle, number, and current role, and a "BASE" label below the base station marker. All elements scale proportionally to the current axis limits.
+
+---
 
 ## Programmatic API
 
+All public methods are accessible from the MATLAB Command Window via the `app` handle:
+
 ```matlab
-% Simulation control
-app.onStart();  app.onStop();  app.onReset();
+% --- Simulation Control ---
+app.onStart()                        % Start simulation
+app.onStop()                         % Stop simulation
+app.onReset()                        % Reset to initial formation
 
-% Parameters (read/write)
-app.MaxSwarmDist = 80;     % meters
-app.CruiseAlt = 50;        % meters
-app.CruiseSpeed = 8;       % m/s
-app.WindSpeed = 5;          % m/s
-app.WindDir = 90;           % degrees
+% --- Mode & Parameters ---
+app.onModeChanged('Decentralized')   % Switch swarm mode
+app.onLeaderChanged('UAV-2 (Bravo)') % Set leader (Leader-Follower mode)
+app.MaxSwarmDist = 80;               % Set max swarm distance (m)
+app.CruiseAlt = 50;                  % Set cruise altitude (m)
+app.CruiseSpeed = 8;                 % Set cruise speed (m/s)
+app.WindSpeed = 5;                   % Set wind speed (m/s)
+app.WindDir = 90;                    % Set wind direction (degrees)
 
-% Mode
-app.onModeChanged('Decentralized');
-app.onLeaderChanged('UAV-2 (Bravo)');
+% --- UAV Access ---
+pos = app.getUAVPosition(1);         % Get [x, y, z] of UAV-1
+app.setUAVPosition(2, [50 30 40]);   % Override UAV-2 position
+tel = app.getTelemetry(3);           % Get telemetry history struct for UAV-3
 
-% UAV access
-pos = app.getUAVPosition(1);           % [x, y, z]
-app.setUAVPosition(2, [50 30 40]);     % override position
-tel = app.getTelemetry(3);             % full history struct
-
-% Waypoints
+% --- Waypoints ---
 app.setWaypoints([50 50; 100 0; 50 -50; 0 0]);
 
-% Plugins
-app.enablePlugin('metrics');
-app.enableAllPlugins();
+% --- Plugin Management ---
+app.enablePlugin('fault_injection');  % Enable single plugin
+app.disablePlugin('battery');         % Disable single plugin
+app.enableAllPlugins();               % Enable all discovered plugins
+app.discoverPlugins();                % Re-scan plugins/ folder
+
+% --- Plugin State ---
 app.setState('my_plugin', 'key', value);
 val = app.getState('my_plugin', 'key');
 
-% Logging and export
-app.logMsg('Custom message');
-app.exportTelemetry();                 % save dialog for .mat
+% --- Custom Tabs ---
+app.addCustomTab('My Tab', @(tab) uilabel(tab, 'Text', 'Hello'));
+
+% --- Logging ---
+app.logMsg('Custom log message');
+
+% --- Data Export ---
+app.exportTelemetry();                % Opens save dialog for .mat file
 ```
 
-### Key Properties
+### Key Properties (Read/Write)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| app.UAVPositions | [4x3] double | Current x, y, z of each UAV |
-| app.UAVHeadings | [4x1] double | Heading in radians |
-| app.UAVRoles | {4x1} cell | Role strings |
-| app.TelHistory(k) | struct | .x .y .z .t .ax .ay .az .gx .gy .gz .mx .my .mz |
-| app.SimTime | double | Simulation clock (seconds) |
-| app.dt | double | Time step (seconds) |
-| app.SwarmMode | char | Current mode string |
-| app.IsRunning | logical | Simulation active flag |
-| app.Waypoints | [Nx2] double | Waypoint coordinates |
-| app.MapOrigin | [1x2] double | Base station [lat, lon] |
+| `app.UAVPositions` | [4x3] double | Current x, y, z of each UAV |
+| `app.UAVHeadings` | [4x1] double | Current heading in radians |
+| `app.UAVRoles` | {4x1} cell | Role strings: leader, follower, relay, etc. |
+| `app.TelHistory(k)` | struct | Per-UAV telemetry (see Telemetry Data Format) |
+| `app.SimTime` | double | Current simulation clock (seconds) |
+| `app.dt` | double | Current time step (seconds) |
+| `app.SwarmMode` | char | Current mode string |
+| `app.Waypoints` | [Nx2] double | Waypoint coordinates [x, y] |
+| `app.WaypointIdx` | double | Index of next waypoint to reach |
+| `app.IsRunning` | logical | Whether simulation is active |
+| `app.GPSAcquired` | logical | Whether GPS lock was obtained |
+| `app.MapOrigin` | [1x2] double | Base station [lat, lon] |
+| `app.NumUAVs` | double | Number of UAVs (always 4) |
 
+---
 
 ## Creating Custom Plugins
 
-1. Copy `plugins/swf_plugin_template.m` to `plugins/swf_yourname.m`
-2. Set `plugin.id` and `plugin.name` (id must be a valid MATLAB field name — no leading digits)
-3. Implement callbacks: `onLoad`, `buildTab`, `onStep`, `onUnload`
-4. Drop file in `plugins/` and click Rescan or restart
+1. Copy `plugins/swf_plugin_template.m` to `plugins/swf_yourname.m`.
+2. Edit the function to return a struct with your plugin's configuration.
+3. Implement the callback functions.
+4. Place the file in the `plugins/` folder.
+5. Restart SwarmFly or click "Rescan Plugins Folder" in the Modules tab.
+
+### Plugin Struct Fields
 
 ```matlab
 function plugin = swf_yourname()
-    plugin.id       = 'yourname';
-    plugin.name     = 'Your Plugin';
-    plugin.version  = '1.0';
-    plugin.hasTab   = true;
-    plugin.hasStep  = true;
-    plugin.onLoad   = @(app) app.setState('yourname', 'count', 0);
-    plugin.onUnload = @(app) [];
-    plugin.buildTab = @(app, tab) uilabel(tab, 'Text', 'Hello');
-    plugin.onStep   = @(app) myUpdate(app);
-end
+    % --- REQUIRED ---
+    plugin.id          = 'yourname';         % Valid MATLAB field name (no leading digits)
+    plugin.name        = 'Your Plugin';      % Display name in Modules tab
 
-function myUpdate(app)
-    % runs every tick, read/write app.UAVPositions, app.TelHistory, etc.
+    % --- OPTIONAL ---
+    plugin.description = 'What it does.';    % Shown in detail panel
+    plugin.version     = '1.0';              % Version string
+    plugin.hasTab      = true;               % Creates a GUI tab when enabled
+    plugin.hasStep     = true;               % onStep called every sim tick
+    plugin.hasToolbar  = false;              % Reserved for future use
+
+    % --- CALLBACKS (function handles, or [] to skip) ---
+    plugin.onLoad      = @(app) init(app);
+    plugin.onUnload    = @(app) cleanup(app);
+    plugin.buildTab    = @(app, tab) buildUI(app, tab);
+    plugin.onStep      = @(app) update(app);
 end
 ```
 
-## Adding a New Swarm Mode
+### Important Constraints
 
-1. Add mode name to `ModeDropdown.Items` in `buildMapTab()`
-2. Add `case` in `onModeChanged()` for role assignment
-3. Create `stepYourMode(app, windVec)` method
-4. Add `case` in `simStep()` to call it
+- Plugin ID must be a valid MATLAB struct field name. No spaces, no leading digits. Use snake_case: `my_plugin`, `view3d`, `nav_planner`.
+- `onStep` must be fast. It runs at the simulation update rate (default 10 Hz). Avoid heavy computation or file I/O in onStep.
+- Use `setState`/`getState` for persistence. Do not add properties to the app object.
+- Use `findobj(app.Fig, 'Tag', 'your_tag')` for cross-tab UI access when onStep needs to update labels in the plugin's tab.
+- Wrap UI updates in try-catch. Timer callbacks run on a separate thread; if the figure is closing or the tab was deleted, handle access will error.
 
-## Simulation Engine
+---
+
+## Extending the Core
+
+To add a new swarm mode to SwarmFly.m:
+
+1. Add the mode name to `ModeDropdown.Items` in `buildMapTab()`.
+2. Add a `case` in `onModeChanged()` to assign UAV roles.
+3. Create a new method `stepYourMode(app, windVec)` that computes position updates.
+4. Add the `case` in `simStep()` to call your new method.
+
+To add more UAVs, change `app.NumUAVs`, expand `UAVColors`, `UAVNames`, `UAVPositions`, `UAVHeadings`, and update the graphics initialization loops in `initMapGraphics` and `initTelemetryGraphics`.
+
+---
+
+## Simulation Engine Details
 
 ### Execution Order Per Tick
 
-1. Advance time: t += dt
-2. Compute wind vector
-3. Run active swarm mode physics
-4. Altitude convergence (proportional controller, gain 0.3)
-5. Record telemetry (13 channels per UAV, 500-sample rolling buffer)
-6. Run all enabled plugin onStep callbacks
-7. Update map graphics (property updates only, no create/delete)
-8. Update telemetry plots (only when Telemetry tab is visible)
-9. drawnow limitrate
+The timer fires `simStep()` at a fixed rate (default 10 Hz / 100ms period):
 
-Plugins at step 6 can modify UAV positions written by physics at step 3. The renderer at step 7 sees the final combined result.
+1. **Time advance**: `dt = 1/UpdateRate`, `SimTime += dt`
+2. **Wind vector**: computed from `WindSpeed` and `WindDir` using `cosd`/`sind`
+3. **Physics**: the active swarm mode function computes new UAV positions and headings based on waypoints, formation offsets, cohesion/separation rules, and wind
+4. **Altitude convergence**: all UAVs are pulled toward `CruiseAlt` with a proportional controller (gain 0.3)
+5. **Telemetry recording**: position and simulated IMU data appended to `TelHistory` with rolling buffer trim
+6. **Plugin step loop**: every enabled plugin with `hasStep=true` has its `onStep(app)` called; plugins can read and modify `UAVPositions`, `TelHistory`, and any other public property
+7. **Map graphics update**: persistent graphics handles have their XData/YData/Visible properties updated (no create/delete per frame)
+8. **Telemetry plot update**: only runs when the Telemetry tab is the active tab
+9. **Render**: `drawnow limitrate` flushes the graphics pipeline
 
 ### Performance Design
 
-All graphics objects created once at startup. Per-tick updates modify XData/YData/Visible properties only. Telemetry plots skipped when not visible. drawnow limitrate throttles to ~20 FPS.
+All map graphics (UAV patches, trails, connection lines, labels) are created once in `initMapGraphics()` and updated via property changes in `updateMapGraphics()`. No `delete`/`findobj`/`cla` per frame. Telemetry plots use persistent line handles with XData/YData updates. Telemetry plot updates are skipped when the Telemetry tab is not visible. `drawnow limitrate` throttles rendering to approximately 20 FPS regardless of timer rate. Plugin onStep errors are caught and logged without crashing the simulation.
+
+### Formation Geometry
+
+The default diamond formation offsets (relative to leader, at MaxSwarmDist = 50):
+
+```
+             Leader (0, 0)
+            /              \
+     (-20, -12)        (20, -12)
+            \              /
+             (0, -24)
+```
+
+Offsets scale linearly with `MaxSwarmDist / 50`. The leader's offset is always (0,0,0); other UAVs track `leader_position + offset` with proportional control (gain 2.0) and speed limiting at 1.5x cruise speed.
+
+---
 
 ## Telemetry Data Format
 
+Each UAV's telemetry is stored in `app.TelHistory(k)` as a struct with the following fields, all row vectors of equal length:
+
 | Field | Unit | Description |
 |-------|------|-------------|
-| t | s | Simulation time |
-| x, y, z | m | Position (East, North, Altitude) |
-| ax, ay, az | m/s^2 | Accelerometer (finite-diff + noise) |
-| gx, gy, gz | deg/s | Gyroscope (noise-dominated) |
-| mx, my, mz | uT | Magnetometer (Earth field + noise) |
+| `t` | s | Simulation time |
+| `x` | m | East position |
+| `y` | m | North position |
+| `z` | m | Altitude (AGL) |
+| `ax` | m/s^2 | Accelerometer X (derived from position delta + noise) |
+| `ay` | m/s^2 | Accelerometer Y |
+| `az` | m/s^2 | Accelerometer Z (approx 9.81 + noise) |
+| `gx` | deg/s | Gyroscope X (noise only) |
+| `gy` | deg/s | Gyroscope Y (noise only) |
+| `gz` | deg/s | Gyroscope Z (heading rate x 0.1 + noise) |
+| `mx` | uT | Magnetometer X (approx 25 + noise) |
+| `my` | uT | Magnetometer Y (approx 5 + noise) |
+| `mz` | uT | Magnetometer Z (approx -40 + noise) |
 
-Exported .mat file contains: `TD` (telemetry), `P` (positions), `M` (mode), `Pr` (parameters).
+Maximum buffer length: 500 samples (configurable via `app.MaxHistory`). Oldest samples are trimmed when the buffer is full.
 
+### Exported .mat File Contents
 
-## Research Paper Materials
+When using Export Telemetry from the Settings tab:
 
-The `paper/` folder contains LaTeX sources for the accompanying research paper:
+| Variable | Type | Content |
+|----------|------|---------|
+| `TD` | struct array | Full TelHistory (4 elements) |
+| `P` | [4x3] double | Final UAV positions |
+| `M` | char | Current swarm mode |
+| `Pr` | struct | Parameters: MaxSwarmDist, CruiseAlt, CruiseSpeed, CommRange, WindSpeed, WindDir, MapOrigin |
 
-| File | Contents |
-|------|----------|
-| appendix_equations.tex | 57 numbered equations across 11 categories, each with `\label{eq:...}` for `\eqref{}` cross-referencing |
-| paper_sections.tex | Section 3 (Simulator Framework) and Section 4 (Features and Use Cases), ~3,500 words |
-| paper_sections.docx | Same content as Word document (Times New Roman, headers, page numbers) |
-| future_work.tex | Section: Future Work — 8 subsections covering HIL, scalability, RL, multi-swarm, etc. |
-| experiments_results.tex | Section: Experiments and Results — 8 experiments, 9 tables, 29 equation references |
-
-To use in your paper:
-```latex
-\input{appendix_equations}     % before \end{document}
-\input{paper_sections}          % in the body
-\input{experiments_results}     % in the body
-\input{future_work}             % in the body
-```
-
-### Equation Categories (57 total)
-
-| Category | Count |
-|----------|-------|
-| Kinematics | 7 |
-| Control Laws | 6 |
-| Swarm Coordination | 5 |
-| Mode-Specific | 5 |
-| Sensor Models | 5 |
-| Fault Injection | 6 |
-| Performance Metrics | 6 |
-| Energy Model | 4 |
-| Collision Avoidance | 3 |
-| Geofencing | 5 |
-| Rendering Geometry | 5 |
-
+---
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| Window off screen | Fixed: auto-sizes to `min(1400, screenWidth-80)` x `min(780, screenHeight-120)` |
-| `Unrecognized field name` on plugin | Plugin ID starts with a digit. Rename to start with letter (e.g. `view3d` not `3d_view`) |
-| `Invalid color, marker, or line style` | Fixed: waypoints use `'Marker', 'd'` name-value syntax instead of `'dx'` |
-| Plugins not found | Ensure `plugins/` folder is next to `SwarmFly.m` |
-| GPS fails | App continues in local-frame mode. Click Re-acquire GPS to retry |
-| TextArea.Value type error | Fixed: all logMsg calls use `char()` and `sprintf()` |
-| Timer empty on Start | Fixed: `onStart` checks `isTimerValid()` and recreates if needed |
-| `.Layout = struct(...)` error | Fixed: all layout assignments use explicit `.Layout.Row` / `.Layout.Column` |
+### Common Issues
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| Window goes off screen | Screen smaller than default window | Fixed in v2.0: auto-sizes to screen with margins and centers |
+| `Unrecognized field name` on plugin load | Plugin ID starts with a digit (e.g. `3d_view`) | Rename to start with a letter (e.g. `view3d`). MATLAB struct fields cannot start with digits |
+| `Invalid color, marker, or line style` | Using `'dx'` as a plot marker spec | Fixed in v2.0: waypoint markers use `'Marker', 'd'` name-value syntax |
+| Plugins not found | `plugins/` folder not next to `SwarmFly.m` | Ensure `plugins/` is a direct subfolder of the directory containing `SwarmFly.m` |
+| GPS acquisition fails | No internet or ip-api.com unreachable | App continues in local frame mode. Click "Re-acquire GPS" to retry |
+| Timer error on close | Timer callback fires during figure deletion | All timer operations are wrapped in try-catch; errors are logged but harmless |
+| `TextArea.Value` type error | Mixing MATLAB string type with char cell arrays | Fixed in v2.0: all logMsg calls use char() and sprintf() |
+| `Property assignment not allowed when object is empty` | Timer not created due to earlier error | Fixed in v2.0: onStart checks isTimerValid() and recreates if needed |
 
 ### Performance Tips
 
-- 10 Hz update rate gives smooth visuals with low CPU load
-- Disable trails in Settings if map feels sluggish
-- 3D View adds rendering cost; disable when not needed
-- Unused plugins can be disabled to reduce per-tick overhead
+- Set simulation update rate to 10 Hz for smooth visuals. Higher rates (20-30 Hz) increase CPU load.
+- Disable trail rendering (Settings tab) if the map feels sluggish with many telemetry samples.
+- Plugins with heavy onStep logic add overhead. Disable unused plugins during high-speed runs.
+- The 3D View plugin adds rendering cost. Disable when not needed.
 
-
-## Version History
-
-| Version | Changes |
-|---------|---------|
-| 1.0 | Initial release: 4 swarm modes, telemetry, GPS, map |
-| 1.1 | Persistent graphics (no create/delete per frame), timer safety, char/string fixes |
-| 2.0 | Plugin architecture, Modules tab, 9 shipped plugins, screen auto-sizing, waypoint marker fix, enableAllPlugins API |
-
+---
 
 ## License
 
