@@ -49,7 +49,7 @@ The platform is designed as both a simulation tool and a test harness: you can r
 
 ## Requirements
 
-- **MATLAB R2020b** or later (requires `uifigure`, App Designer components, `uigridlayout`)
+- **MATLAB R2025b** or later (requires `uifigure`, App Designer components, `uigridlayout`)
 - **Internet connection** for IP-based GPS geolocation (optional; app works without it)
 - No additional toolboxes required. The application uses only core MATLAB functionality.
 
